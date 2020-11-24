@@ -1,0 +1,10 @@
+name = "HexGeoGrids"
+uuid = "89dea007-0c30-469c-8894-f57074d8b947"
+authors = ["Evan Fields <ejf12009@mymail.pomona.edu>"]
+version = "0.1.0"
+
+[deps]
+GeoInterface = "cf35fbd7-0cd7-5166-be24-54bfbe79505f"
+GeoJSON = "61d90e0f-e114-555e-ac52-39dfb47a3ef9"
+Geodesy = "0ef565a4-170c-5f04-8de2-149903a85f3d"
+Hexagons = "a1b4810d-1bce-5fbd-ac56-80944d57a21f"
