@@ -20,7 +20,6 @@ using Geodesy:
 
 using GeoInterface
 import GeoInterface: Polygon
-using GeoJSON
 using Hexagons
 
 struct UTMZone
@@ -69,13 +68,27 @@ end
 # Conversions lonlat ⇔ hexagon
 ###
 
+
+
+"""To ensure HexCells are nearly north aligned everywhere, longitude-shift lon-lat
+points so that UTM-LLA conversions happen as if the HexSystem center is on a line
+of longitude 3 mod 6. E.g. if a HexSystem has a center at longitude 7 degrees, shift
+longitudes by 2 degrees so that the coordinate conversions happen near 9 degrees
+of longitude."""
+_shift_needed(lon) = 3 - mod(lon, 6)
+_shift_needed(hs::HexSystem) = _shift_needed(hs.center.lon)
+
+_shift_lon(lla::LLA, dlon) = LLA(lla.lat, lla.lon + dlon, lla.alt)
+
+
 """Map a latitude and longitude into cartesian coordinates for a given
 HexSystem. In this coordinate system, the HexSystem's center is at the
 origin."""
 function _cart_coords(lon, lat, hs::HexSystem)
-    lla = LLA(lat, lon, 0.0)
+    shift = _shift_needed(hs)
+    lla = LLA(lat, lon + shift, 0.0)
     converter = UTMfromLLA(hs.utm_zone.zone, hs.utm_zone.isnorth, wgs84)
-    utmz_center = converter(hs.center)
+    utmz_center = converter(_shift_lon(hs.center, shift))
     utmz_point = converter(lla)
     return utmz_point.x - utmz_center.x, utmz_point.y - utmz_center.y
 end
@@ -89,11 +102,12 @@ end
 """Map an (x,y) point in the Cartesian plane of Hexagons.jl to a lon-lat pair
 by way of the UTM projection specified by a hex system. Return a tuple (lon, lat)."""
 function _hex_cartesian_to_lonlat(cart_x, cart_y, hs::HexSystem)
+    shift = _shift_needed(hs)
     latlon_to_utm = UTMfromLLA(hs.utm_zone.zone, hs.utm_zone.isnorth, wgs84)
-    utm_center = latlon_to_utm(hs.center)
+    utm_center = latlon_to_utm(_shift_lon(hs.center, shift))
     utm_point = UTM(cart_x + utm_center.x, cart_y + utm_center.y)
     utm_to_latlon = LLAfromUTM(hs.utm_zone.zone, hs.utm_zone.isnorth, wgs84)
-    lla_point = utm_to_latlon(utm_point)
+    lla_point = _shift_lon(utm_to_latlon(utm_point), -shift)
     return lla_point.lon, lla_point.lat
 end
 

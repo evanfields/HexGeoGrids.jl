@@ -1,4 +1,5 @@
 using HexGeoGrids
+HGG = HexGeoGrids
 Hexagons = HexGeoGrids.Hexagons
 using Test
 using Random
@@ -57,6 +58,12 @@ end
     for sys in systems, _ in 1:n_points
         q, r = rand(-1000:1000, 2)
         cell = HexCell(sys, convert(Hexagons.HexagonCubic, Hexagons.HexagonAxial(q, r)))
-        @test index_to_hex(hex_to_index(cell)) == cell
+        @test HexCell(index(cell)) == cell
     end
+end
+
+@testset "Utils" begin
+    @test HGG._shift_needed(2) == 1
+    @test HGG._shift_needed(17) == -2
+    @test HGG._shift_needed(18) == 3
 end
