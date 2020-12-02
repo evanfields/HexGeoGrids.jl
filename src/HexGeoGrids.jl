@@ -212,6 +212,9 @@ index(lon, lat, hs::HexSystem) = index(HexCell(lon, lat, hs))
 # GeoInterface utilities
 ###
 
-Polygon(hc::HexCell) = [Point(v...) for v in vertices(hc)] |> Polygon
+function Polygon(hc::HexCell)
+    verts = vertices(hc)[[1:6; 1]] # double up first point to get 6 sides
+    return [Point(v...) for v in verts] |> Polygon
+end
 
 end # module
