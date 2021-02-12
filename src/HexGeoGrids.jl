@@ -61,7 +61,7 @@ end
 
 struct HexCell
     system::HexSystem
-    coords::HexagonCubic
+    hex::HexFlatTop{CoordAxial{Int64}}
 end 
 
 ###
@@ -86,17 +86,17 @@ HexSystem. In this coordinate system, the HexSystem's center is at the
 origin."""
 function _cart_coords(lon, lat, hs::HexSystem)
     shift = _shift_needed(hs)
-    lla = LLA(lat, lon + shift, 0.0)
+    lla_point = _shift_lon(LLA(lat, lon, 0.0), shift)
     converter = UTMfromLLA(hs.utm_zone.zone, hs.utm_zone.isnorth, wgs84)
     utmz_center = converter(_shift_lon(hs.center, shift))
-    utmz_point = converter(lla)
+    utmz_point = converter(lla_point)
     return utmz_point.x - utmz_center.x, utmz_point.y - utmz_center.y
 end
 
 """Map lon-lat coordinates (in degrees) to a HexCell."""
 function HexCell(lon::Real, lat::Real, hs::HexSystem)
-    coords = _cart_coords(lon, lat, hs)
-    return HexCell(hs, cube_round(coords..., hs.hex_size, hs.hex_size))
+    coords = _cart_coords(lon, lat, hs) ./ hs.hex_size
+    return HexCell(hs, hex_containing(HexFlatTop, coords...))
 end
 
 """Map an (x,y) point in the Cartesian plane of Hexagons.jl to a lon-lat pair
@@ -112,18 +112,19 @@ function _hex_cartesian_to_lonlat(cart_x, cart_y, hs::HexSystem)
 end
 
 """Return the vertices of a HexCell as a list of (lon, lat) tuples."""
-function vertices(hex::HexCell)
-    system = hex.system
+function vertices(cell::HexCell)
+    system = cell.system
+    size = system.hex_size
     return [
-        _hex_cartesian_to_lonlat(vert..., system)
-        for vert in Hexagons.vertices(hex.coords, system.hex_size, system.hex_size)
+        _hex_cartesian_to_lonlat((size .* vert)..., system)
+        for vert in Hexagons.vertices(cell.hex)
     ]
 end
 
 """Return the center of a HexCell as a tuple (lon, lat)."""
-function center(hex::HexCell)
-    center_cartesian = Hexagons.center(hex.coords, hex.system.hex_size, hex.system.hex_size)
-    return _hex_cartesian_to_lonlat(center_cartesian..., hex.system)
+function center(cell::HexCell)
+    center_cartesian = Hexagons.center(cell.hex) .* cell.system.hex_size
+    return _hex_cartesian_to_lonlat(center_cartesian..., cell.system)
 end
 
 ###
@@ -137,7 +138,7 @@ function _lonlat_to_int(lon::Integer, lat::Integer)
     -90 <= lat <= 90 || throw(DomainError(lat, "Lat of $lat not in [-90, 90]"))
     return (lat + 90) + 181 * (lon + 180)
 end
-"""Convert an integer in [0, 65159] to a lon-lat pair. Inverse of `_lonlat_to_int`."""
+"""Convert an integer in [0, 65340] to a lon-lat pair. Inverse of `_lonlat_to_int`."""
 function _int_to_lonlat(x::Integer)
     # 65_340 is 361 * 181 - 1, where 361 is number of legal lons, 181 legal lats
     0 <= x <= 65340 || throw(DomainError(x, "x not in [0, 65_340]"))
@@ -162,9 +163,10 @@ function _prefix_to_system(str)
     return HexSystem(lon, lat, hex_size)
 end
 
-"""Create an 8-digit (base 16) hash body from hexagon coordinates."""
-function _hex_coords_to_hash(h)
-    h_axial = convert(HexagonAxial, h)
+"""Create an 8-digit (base 16) hash body from a hexagon
+(i.e. the `.hex` field of a `HexCell`)."""
+function _hex_coords_to_hash(hex)
+    h_axial = hex.coords
     # shift Int16 to UInt16 so string form won't have a leading '-'
     q_offset, r_offset = ((h_axial.q, h_axial.r) .- typemin(Int16)) .|> UInt16
     return string(q_offset, base = 16, pad = 4) * string(r_offset, base = 16, pad = 4)
@@ -174,14 +176,13 @@ end
 function _hash_to_hex_coords(str)
     q_offset = parse(Int, str[1:4], base = 16)
     r_offset = parse(Int, str[5:8], base = 16)
-    h_axial = HexagonAxial(q_offset + typemin(Int16), r_offset + typemin(Int16))
-    return convert(HexagonCubic, h_axial)
+    return CoordAxial(q_offset + typemin(Int16), r_offset + typemin(Int16))
 end
 
 """Encode a HexCell as a 17 character `prefix:body` index string."""
 function index(hc::HexCell)
     prefix = _system_to_prefix(hc.system)
-    body = _hex_coords_to_hash(hc.coords)
+    body = _hex_coords_to_hash(hc.hex)
     return prefix * ":" * body
 end
 
@@ -189,7 +190,7 @@ end
 function HexCell(str::AbstractString)
     return HexCell(
         _prefix_to_system(str[1:8]),
-        _hash_to_hex_coords(str[10:17])
+        HexFlatTop(_hash_to_hex_coords(str[10:17]))
     )
 end
 

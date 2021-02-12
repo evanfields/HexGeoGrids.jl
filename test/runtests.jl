@@ -57,7 +57,7 @@ end
 @testset "Hex to hash" begin
     for sys in systems, _ in 1:n_points
         q, r = rand(-1000:1000, 2)
-        cell = HexCell(sys, convert(Hexagons.HexagonCubic, Hexagons.HexagonAxial(q, r)))
+        cell = HexCell(sys, Hexagons.HexFlatTop(Hexagons.CoordAxial(q, r)))
         @test HexCell(index(cell)) == cell
     end
 end
